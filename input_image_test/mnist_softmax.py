@@ -53,9 +53,10 @@ cross_entropy = -tf.reduce_sum(y_ * tf.log(y))
 train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
 # Train
-tf.initialize_all_variables().run()
+#tf.initialize_all_variables().run()
+tf.global_variables_initializer().run()
 # print(tf.argmax(W,1).eval())
-for i in range(1000):
+for i in range(5000):
   batch_xs, batch_ys = mnist.train.next_batch(100)
   # print(tf.argmax(W,1).eval())
   train_step.run({x: batch_xs, y_: batch_ys})
