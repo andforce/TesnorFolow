@@ -12,7 +12,15 @@ import cv2
 import os
 import os.path
 from PIL import Image
+import tf_image
 
+###############################################################################################
+image_list = 'debug.txt'
+out_tfrecords = './train.tfrecords'
+resize_height = 28  # height
+resize_width = 28  # width
+images = {'0'}
+###############################################################################################
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -32,7 +40,8 @@ def load_file(examples_list_file):
     return np.asarray(examples), np.asarray(labels), len(lines)
 
 
-def extract_image(filename, resize_height, resize_width):
+def read_image_info_from_file(filename, resize_height, resize_width):
+    print "fileName>>> " + filename
     image = cv2.imread(filename)
     image = cv2.resize(image, (resize_height, resize_width))
     b, g, r = cv2.split(image)
@@ -40,16 +49,16 @@ def extract_image(filename, resize_height, resize_width):
     return rgb_image
 
 
-def write_tfrecords_file(train_file, name, output_directory, resize_height, resize_width):
-    if not os.path.exists(output_directory) or os.path.isfile(output_directory):
-        os.makedirs(output_directory)
-    _examples, _labels, examples_num = load_file(train_file)
-    filename = output_directory + "/" + name + '.tfrecords'
-    writer = tf.python_io.TFRecordWriter(filename)
+def write_tfrecords_file(image_list, out_tfrecords, resize_height, resize_width):
+    _examples, _labels, examples_num = load_file(image_list)
+
+    writer = tf.python_io.TFRecordWriter(out_tfrecords)
     for i, [example, label] in enumerate(zip(_examples, _labels)):
-        print('No.%d' % (i))
-        image = extract_image(example, resize_height, resize_width)
-        print('shape: %d, %d, %d, label: %d' % (image.shape[0], image.shape[1], image.shape[2], label))
+        image = read_image_info_from_file(example, resize_height, resize_width)
+
+        print('image: %d, height:%d, width:%d, depth:%d, label: %d' % (
+            i, image.shape[0], image.shape[1], image.shape[2], label))
+
         image_raw = image.tostring()
         example = tf.train.Example(features=tf.train.Features(feature={
             'image_raw': _bytes_feature(image_raw),
@@ -61,6 +70,61 @@ def write_tfrecords_file(train_file, name, output_directory, resize_height, resi
         writer.write(example.SerializeToString())
     writer.close()
 
+
+
+def create_record(out_tfrecords):
+    cwd = os.getcwd()
+    writer = tf.python_io.TFRecordWriter(out_tfrecords)
+    for index, name in enumerate(images):
+        class_path = cwd +"/"+ name+"/"
+        print name
+        i = 0
+        for img_name in os.listdir(class_path):
+            img_path = class_path + img_name
+
+            image = read_image_info_from_file(img_path, resize_height, resize_width)
+
+            label = name
+            print('image: %d, height:%d, width:%d, depth:%d, label: %s' % (
+                i, image.shape[0], image.shape[1], image.shape[2], label))
+
+            i += 1
+            example = tf.train.Example(features=tf.train.Features(feature=tf_image.read_feature(img_path, label)))
+
+            writer.write(example.SerializeToString())
+    writer.close()
+
+
+def read_record(tfrecord_list_file):
+
+    features = tf_image.read_features(tfrecord_list_file)
+
+    image = tf.decode_raw(features['image_raw'], tf.uint8)
+    label = tf.decode_raw(features['label'], tf.int32)
+    height = tf.cast(features['height'], tf.int32)
+    width = tf.cast(features['width'], tf.int32)
+    depth = tf.cast(features['depth'], tf.int32)
+
+
+    init_op = tf.initialize_all_variables()
+    resultImg = []
+    resultLabel = []
+    with tf.Session() as sess:
+        sess.run(init_op)
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+        for i in range(21):
+            image_eval = image.eval()
+            print('step', i, 'training accuracy', image_eval)
+            resultLabel.append(label.eval())
+            image_eval_reshape = image_eval.reshape([height.eval(), width.eval(), depth.eval()])
+            resultImg.append(image_eval_reshape)
+            # pilimg = Image.fromarray(np.asarray(image_eval_reshape))
+            # pilimg.show()
+        coord.request_stop()
+        coord.join(threads)
+        sess.close()
+    return resultImg, resultLabel
 
 def disp_tfrecords(tfrecord_list_file):
     filename_queue = tf.train.string_input_producer([tfrecord_list_file])
@@ -91,11 +155,12 @@ def disp_tfrecords(tfrecord_list_file):
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(21):
             image_eval = image.eval()
+            print('step', i, 'training accuracy', image_eval)
             resultLabel.append(label.eval())
             image_eval_reshape = image_eval.reshape([height.eval(), width.eval(), depth.eval()])
             resultImg.append(image_eval_reshape)
-            pilimg = Image.fromarray(np.asarray(image_eval_reshape))
-            pilimg.show()
+            # pilimg = Image.fromarray(np.asarray(image_eval_reshape))
+            # pilimg.show()
         coord.request_stop()
         coord.join(threads)
         sess.close()
@@ -105,6 +170,7 @@ def disp_tfrecords(tfrecord_list_file):
 def read_tfrecord(filename_queuetemp):
     filename_queue = tf.train.string_input_producer([filename_queuetemp])
     reader = tf.TFRecordReader()
+
     _, serialized_example = reader.read(filename_queue)
     features = tf.parse_single_example(
         serialized_example,
@@ -122,23 +188,19 @@ def read_tfrecord(filename_queuetemp):
     image = tf.cast(image, tf.float32) * (1. / 255) - 0.5
     # label
     label = tf.cast(features['label'], tf.int32)
+    print label
     return image, label
 
 
 def test():
-    ###############################################################################################
-    train_file = 'train.txt'
-    name = 'train'  # 生成train.tfrecords
-    output_directory = './tfrecords'
-    resize_height = 32  # 存储图片高度
-    resize_width = 32  # 存储图片宽度
-    ###############################################################################################
-
-    write_tfrecords_file(train_file, name, output_directory, resize_height, resize_width)  # 转化函数
-    img, label = disp_tfrecords(output_directory + '/' + name + '.tfrecords')  # 显示函数
-    img, label = read_tfrecord(output_directory + '/' + name + '.tfrecords')  # 读取函数
+    write_tfrecords_file(image_list, out_tfrecords, resize_height, resize_width)
+    # img, label = disp_tfrecords(out_tfrecords)
+    img, label = read_tfrecord(out_tfrecords)
     print label
 
 
 if __name__ == '__main__':
-    test()
+    # test()
+    # disp_tfrecords(out_tfrecords)
+    create_record(out_tfrecords)
+    # read_tfrecord(out_tfrecords)
