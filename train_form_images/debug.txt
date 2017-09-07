@@ -1,0 +1,10 @@
+mnist_train_1.png 0
+mnist_train_21.png 0
+mnist_train_34.png 0
+mnist_train_37.png 0
+mnist_train_51.png 0
+mnist_train_56.png 0
+mnist_train_63.png 0
+mnist_train_68.png 0
+mnist_train_69.png 0
+mnist_train_75.png 0
