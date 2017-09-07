@@ -35,7 +35,7 @@ from get_image import *
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_string('data_dir', 'MNIST_data/', 'Directory for storing data')
+flags.DEFINE_string('data_dir', '../MNIST_data/', 'Directory for storing data')
 
 mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
 
