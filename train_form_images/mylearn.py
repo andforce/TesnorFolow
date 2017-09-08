@@ -105,7 +105,7 @@ def read_record(tfrecord_list_file):
     depth = tf.cast(features['depth'], tf.int32)
 
 
-    init_op = tf.initialize_all_variables()
+    init_op = tf.global_variables_initializer()
     resultImg = []
     resultLabel = []
     with tf.Session() as sess:
@@ -145,7 +145,7 @@ def disp_tfrecords(tfrecord_list_file):
     width = features['width']
     depth = features['depth']
     label = tf.cast(features['label'], tf.int32)
-    init_op = tf.initialize_all_variables()
+    init_op = tf.global_variables_initializer()
     resultImg = []
     resultLabel = []
     with tf.Session() as sess:
